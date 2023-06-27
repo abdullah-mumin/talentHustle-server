@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+var nodeBase64 = require('nodejs-base64-converter');
 const path = require('path');
 const { MongoClient, ServerApiVersion } = require('mongodb');
 const app = express();
@@ -47,14 +48,27 @@ const client = new MongoClient(uri, {
         version: ServerApiVersion.v1,
         strict: true,
         deprecationErrors: true,
-    }
+    },
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    maxPoolSize: 10,
 });
 
 async function run() {
     try {
         // await client.connect();
+        client.connect((error) => {
+            if (error) {
+                console.log(error)
+                return;
+            }
+        });
         const userCollection = client.db("talentHustle").collection('users');
         const jobCollection = client.db("talentHustle").collection('jobs');
+        const applyCollection = client.db("talentHustle").collection('apply');
+        const candidateCollection = client.db("talentHustle").collection('candidate');
+
+
 
         app.get('/register', async (req, res) => {
             const cursor = userCollection.find({})
@@ -68,8 +82,31 @@ async function run() {
             const user = req.body;
             const result = await userCollection.insertOne(user);
             // console.log(user);
-            user.id = result.insertedId;
-            res.send(user);
+            if (result != null && res.statusCode === 200) {
+                const message = 'Register Successful';
+                const info = {
+                    data: result,
+                    message: message
+                }
+                res.send(info);
+                // console.log(info)
+            }
+            else if (result == null && res.statusCode === 200) {
+                const message = 'Register Failed';
+                const info = {
+                    data: result,
+                    message: message
+                }
+                res.send(info);
+            }
+            else if (result != null && res.statusCode === 400 || result == null && res.statusCode === 400) {
+                const message = 'Register Failed';
+                const info = {
+                    data: result,
+                    message: message
+                }
+                res.send(info);
+            }
         });
 
         app.post('/login', async (req, res) => {
@@ -141,6 +178,7 @@ async function run() {
             data.id = result.insertedId;
             res.send(data);
         });
+
         app.post('/application', upload.any(), async (req, res) => {
             const job = req.body;
             const data = {
@@ -157,16 +195,20 @@ async function run() {
             data.id = result.insertedId;
             res.send(data);
         });
-        app.post('/search', async (req, res) => {
+
+        app.get('/search/:title&:location', async (req, res) => {
+            const title = req.params.title;
+            const location = req.params.location;
             const query = {
-                title: req.body.title,
-                location: req.body.location
+                title: title,
+                location: location
             }
             const result = jobCollection.find(query);
             const users = await result.toArray();
             // console.log(users);
             res.send(users);
         });
+
         app.get('/search/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
@@ -174,6 +216,73 @@ async function run() {
             res.send(result);
             // console.log(result);
         });
+
+        app.post('/apply', upload.any(), async (req, res) => {
+            const data = {
+                name: req.body.name,
+                email: req.body.email,
+                companyEmail: req.body.companyEmail,
+                number: req.body.number,
+                letter: req.body.letter,
+                experience: req.body.experience,
+                cv: req.body.cv
+            };
+            // const file = req.files[0];
+            // console.log(req.body);
+            // console.log(nodeBase64.encode(file));
+            const result = await applyCollection.insertOne(data);
+            if (result != null && res.statusCode === 200) {
+                const message = 'Successful';
+                const info = {
+                    data: result,
+                    message: message
+                }
+                res.send(info);
+                // console.log(info)
+            }
+            else if (result == null && res.statusCode === 200) {
+                const message = 'Failed';
+                const info = {
+                    data: result,
+                    message: message
+                }
+                res.send(info);
+            }
+            else if (result != null && res.statusCode === 400 || result == null && res.statusCode === 400) {
+                const message = 'Failed';
+                const info = {
+                    data: result,
+                    message: message
+                }
+                res.send(info);
+            }
+        });
+
+        app.get('/apply/:email', async (req, res) => {
+            const email = req.params.email;
+            // console.log(email);
+            const query = {
+                companyEmail: email
+            };
+            const apply = applyCollection.find(query);
+            const result = await apply.toArray();
+            res.send(result);
+        });
+
+        app.post('/profile', upload.single('image'), async (req, res) => {
+            const data = {
+                name: req.body.name,
+                number: req.body.number,
+                email: req.body.email,
+                address: req.body.address,
+                image: req.body.image
+            };
+            // console.log(req.body)
+            // console.log(req.body.image)
+            const result = await candidateCollection.insertOne(data)
+            res.send(result);
+        });
+
     }
     finally {
         // await client.close();
